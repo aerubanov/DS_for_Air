@@ -126,7 +126,7 @@ if __name__ == '__main__':
     n_splits = round((len(x)-20*24)/24)
     cv = TimeSeriesSplit(n_splits=n_splits, max_train_size=20*24, test_size=24)
     splits = cv.split(x)
-    
+
     train_index, test_index = next(splits)
     model = train_init_model(X=x[train_index],
                              y=y[train_index],
@@ -153,7 +153,7 @@ if __name__ == '__main__':
         x_new = x[test_index]
         y_new = y[test_index]
         i += 1
- 
+
     print(f'MSE: {np.mean(scores)} STD: {np.std(scores)}')
     plot_result(
             model,
