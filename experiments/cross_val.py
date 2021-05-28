@@ -1,3 +1,4 @@
+from experiments.reg_exmp import figsize
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.preprocessing import QuantileTransformer
 from sklearn.metrics import mean_squared_error
@@ -123,8 +124,8 @@ if __name__ == '__main__':
     tf.random.set_seed(0)
 
     x, y = get_data(data_file)
-    n_splits = round((len(x)-20*24)/24)
-    cv = TimeSeriesSplit(n_splits=n_splits, max_train_size=20*24, test_size=24)
+    n_splits = round((len(x)-30*24)/24)
+    cv = TimeSeriesSplit(n_splits=n_splits, max_train_size=30*24, test_size=24)
     splits = cv.split(x)
 
     train_index, test_index = next(splits)
@@ -162,3 +163,8 @@ if __name__ == '__main__':
             x[len(x)-24:][:, None],
             y[len(x)-24:][:, None],
         )
+    _, ax = plt.subplots(figsize=(15, 5))
+    ax.plot([i for i in range(len(scores))], scores)
+    ax.set_xlabel('iteration')
+    ax.set_ylabel('MSE')
+    plt.show()
