@@ -1,4 +1,3 @@
-from experiments.reg_exmp import figsize
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.preprocessing import QuantileTransformer
 from sklearn.metrics import mean_squared_error
