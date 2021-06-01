@@ -27,11 +27,11 @@ def get_data(file_path: str):
             )
     qt.fit(data.spat.y)
 
-    data = data.spat.tloc['2021-01-01':'2021-01-04']
+    data = data.spat.tloc['2021-01-01':'2021-01-30']
     data = data.dropna()
     data = data[['timestamp', 'lat', 'lon', 'P1', 'sds_sensor']]
-    train_data = data.spat.tloc['2021-01-01':'2021-01-03']
-    test_data = data.spat.tloc['2021-01-03':]
+    train_data = data.spat.tloc['2021-01-01':'2021-01-28']
+    test_data = data.spat.tloc['2021-01-28':]
 
     # TODO replace by data.spat.y after solving issue 120
     train_data['P1'] = qt.transform(train_data.spat.y.values).flatten()
@@ -72,7 +72,7 @@ def train_model(data: pd.DataFrame, M=200) -> gpflow.models.sgpr.SGPR:
     optimizer.minimize(
             model.training_loss,
             model.trainable_variables,
-            options={'disp': False},
+            options={'iprint': 50, 'maxiter': 600},
             )
     return model
 
@@ -81,14 +81,11 @@ if __name__ == '__main__':
     df_train, df_test = get_data(data_file)
     print(df_train)
     print(df_test)
-    # x = df_train[np.isclose(df_train['timestamp'], 13.0)]
-    # print(x)
-    # plt.scatter(x['lon'], x['lat'], c=x['P1'], cmap='rainbow')
-    # plt.colorbar()
-    # plt.show()
-    # x1 = df_train.spat.random_sensors(1)
-    # plt.plot(x1['timestamp'], x1['P1'])
-    # plt.show()
+    print(df_train.timestamp.max(), df_test.timestamp.min())
+    df_train.groupby('timestamp').mean().reindex().P1.plot()
+    plt.show()
+    df_test.groupby('timestamp').mean().reindex().P1.plot()
+    plt.show()
     model = train_model(df_train, M=400)
     gpflow.utilities.print_summary(model)
 
@@ -98,15 +95,16 @@ if __name__ == '__main__':
     mse = mean_squared_error(y_test, mu[:, 0])
     print(mse)
 
-    x_test = df_test[df_test['timestamp'] == 62.0][[
+    step = 662
+    x_test = df_test[df_test['timestamp'] == step][[
         'timestamp', 'lon', 'lat'
         ]].values
-    y_test = df_test[df_test['timestamp'] == 62.0]['P1'].values
+    y_test = df_test[df_test['timestamp'] == step]['P1'].values
     lon_min, lon_max = x_test[:, 1].min(), x_test[:, 1].max()
     lat_min, lat_max = x_test[:, 2].min(), x_test[:, 2].max()
 
     new_lon, new_lat = np.mgrid[lon_min:lon_max:0.025, lat_min:lat_max:0.0125]
-    xx = np.vstack((55 * np.ones(new_lon.flatten().shape[0]),
+    xx = np.vstack((step * np.ones(new_lon.flatten().shape[0]),
                     new_lon.flatten(),
                     new_lat.flatten())).T
     print(xx)
