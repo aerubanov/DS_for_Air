@@ -5,10 +5,30 @@ from sklearn.metrics import mean_squared_error
 import matplotlib.pyplot as plt
 import gpflow
 
+from src.models import OSGPR
+
 
 data_file = 'DATA/processed/dataset.csv'
 x_col = ['timestamp', 'lon', 'lat']
 y_col = ['P1']
+
+spat_cov = gpflow.kernels.Matern32(
+        variance=1,
+        lengthscales=0.1,
+        active_dims=[1, 2],
+        )
+
+mt = gpflow.kernels.Matern32(variance=1, lengthscales=24, active_dims=[0])
+pk = gpflow.kernels.Periodic(
+        gpflow.kernels.SquaredExponential(
+            lengthscales=24*1.5,
+            active_dims=[0],
+            ),
+        period=24,
+        )
+time_cov = mt * pk
+kernel = spat_cov * time_cov
+
 
 def convert_time(data) -> pd.DataFrame:
     data['timestamp'] = pd.to_datetime(data['timestamp'])
@@ -38,30 +58,16 @@ def get_data(file_path: str) -> pd.DataFrame:
     return data
 
 
-def train_model(data: pd.DataFrame, M=200, max_iter=100) -> gpflow.models.sgpr.SGPR:
+def train_model(
+        data: pd.DataFrame,
+        M=200,
+        max_iter=100
+        ) -> gpflow.models.sgpr.SGPR:
     x = data[x_col].values
     y = data[y_col].values[:, None]
 
-    spat_cov = gpflow.kernels.Matern32(
-            variance=1,
-            lengthscales=0.1,
-            active_dims=[1, 2],
-            )
-
-    mt = gpflow.kernels.Matern32(variance=1, lengthscales=24, active_dims=[0])
-    pk = gpflow.kernels.Periodic(
-            gpflow.kernels.SquaredExponential(
-                lengthscales=24*1.5,
-                active_dims=[0],
-                ),
-            period=24,
-            )
-    time_cov = mt * pk
-
-    cov = spat_cov * time_cov
-
     Z = x[np.random.permutation(x.shape[0])[0:M], :]
-    model = gpflow.models.sgpr.SGPR((x, y), cov, Z)
+    model = gpflow.models.sgpr.SGPR((x, y), kernel, Z)
 
     optimizer = gpflow.optimizers.Scipy()
     optimizer.minimize(
@@ -86,11 +92,11 @@ def update_model(
         Su = Su[0, :, :]
     Kaa1 = model.kernel.K(model.inducing_variable.Z)
 
-    Zinit = x_new[np.random.permutation(x_new.shape[0])[0:new_m], :]
+    Zinit = x[np.random.permutation(x.shape[0])[0:new_m], :]
     Zinit = np.vstack((Z_opt.numpy(), Zinit))
 
     new_model = OSGPR(
-            (x_new, y_new),
+            (x, y),
             kernel,
             mu,
             Su,
