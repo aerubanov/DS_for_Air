@@ -27,11 +27,11 @@ def get_data(file_path: str):
             )
     qt.fit(data.spat.y)
 
-    data = data.spat.tloc['2021-01-01':'2021-01-30']
+    data = data.spat.tloc['2021-01-01':'2021-01-17']
     data = data.dropna()
     data = data[['timestamp', 'lat', 'lon', 'P1', 'sds_sensor']]
-    train_data = data.spat.tloc['2021-01-01':'2021-01-28']
-    test_data = data.spat.tloc['2021-01-28':]
+    train_data = data.spat.tloc['2021-01-01':'2021-01-15']
+    test_data = data.spat.tloc['2021-01-15':]
 
     # TODO replace by data.spat.y after solving issue 120
     train_data['P1'] = qt.transform(train_data.spat.y.values).flatten()
@@ -72,7 +72,7 @@ def train_model(data: pd.DataFrame, M=200) -> gpflow.models.sgpr.SGPR:
     optimizer.minimize(
             model.training_loss,
             model.trainable_variables,
-            options={'iprint': 50, 'maxiter': 600},
+            options={'iprint': 50, 'maxiter': 800},
             )
     return model
 
@@ -86,7 +86,7 @@ if __name__ == '__main__':
     plt.show()
     df_test.groupby('timestamp').mean().reindex().P1.plot()
     plt.show()
-    model = train_model(df_train, M=400)
+    model = train_model(df_train, M=600)
     gpflow.utilities.print_summary(model)
 
     x_test = df_test[['timestamp', 'lon', 'lat']].values
@@ -95,7 +95,7 @@ if __name__ == '__main__':
     mse = mean_squared_error(y_test, mu[:, 0])
     print(mse)
 
-    step = 662
+    step = 365
     x_test = df_test[df_test['timestamp'] == step][[
         'timestamp', 'lon', 'lat'
         ]].values
