@@ -5,12 +5,12 @@ from sklearn.metrics import mean_squared_error
 import matplotlib.pyplot as plt
 import gpflow
 
-from src.models import OSGPR
+from src.models.osgpr import OSGPR
 
 
 data_file = 'DATA/processed/dataset.csv'
 x_col = ['timestamp', 'lon', 'lat']
-y_col = ['P1']
+y_col = 'P1'
 
 spat_cov = gpflow.kernels.Matern32(
         variance=1,
@@ -38,6 +38,19 @@ def convert_time(data) -> pd.DataFrame:
     return data
 
 
+def time_cv(data: pd.DataFrame, step=24):
+    curr_t = data['timestamp'].min()
+    next_t = curr_t + step
+    while curr_t < data['timestamp'].max():
+        item = data[
+                (data['timestamp'] >= curr_t) & (data['timestamp'] < next_t)
+                ]
+        if len(item) > 0:
+            yield item
+        curr_t = next_t
+        next_t += step
+
+
 def get_data(file_path: str) -> pd.DataFrame:
     data = pd.read_csv(file_path)
     data.spat.set_y_col(y_col)
@@ -48,7 +61,7 @@ def get_data(file_path: str) -> pd.DataFrame:
             )
     qt.fit(data.spat.y)
 
-    data = data.spat.tloc['2021-01-01':'2021-04-01']
+    data = data.spat.tloc['2021-01-01':'2021-02-01']
     data = data.dropna(subset=['P1'])
     data = data[['timestamp', 'lat', 'lon', 'P1', 'sds_sensor']]
 
@@ -82,6 +95,8 @@ def update_model(
         model: gpflow.models.GPModel,
         data: pd.DataFrame,
         new_m: int = 20,
+        max_iter: int = 1000,
+        iprint: int = 50,
         ) -> gpflow.models.GPModel:
     x = data[x_col].values
     y = data[y_col].values[:, None]
@@ -108,11 +123,26 @@ def update_model(
     for i, item in enumerate(model.kernel.trainable_variables):
         new_model.kernel.trainable_variables[i].assign(item)
     optimizer = gpflow.optimizers.Scipy()
-    optimizer.minimize(new_model.training_loss, new_model.trainable_variables)
+    optimizer.minimize(
+            new_model.training_loss,
+            new_model.trainable_variables,
+            options={'iprint': iprint, 'maxiter': max_iter},
+            )
     return new_model
 
 
-def eval_model(model: gpflow.models.GPModel, train_data, test_data):
+def eval_model(model: gpflow.models.GPModel, test_data):
+    x_train = train_data[x_col].values
+    x_test = test_data[x_col].values
+    y_test = test_data[y_col].values[:, None]
+
+
+    mu, var = model.predict_f(x_test)
+    mse = mean_squared_error(y_test, mu[:, 0])
+    return mse
+
+
+def plot_model(model: gpflow.models.GPModel, train_data, test_data):
     x_train = train_data[x_col].values
     x_test = test_data[x_col].values
     y_test = test_data[y_col].values[:, None]
@@ -162,11 +192,22 @@ def eval_model(model: gpflow.models.GPModel, train_data, test_data):
 
 if __name__ == '__main__':
     data = get_data(data_file)
-    print(data['timestamp'].min(), data['timestamp'].max())
-    train_data = data[data['timestamp'] < 24 * 13]
+    train_t = 13*24
+    test_t = 13*24 + 24
+    results = []
+    train_data = data[data['timestamp'] < train_t]
     test_data = data[
-            (data['timestamp'] >= 24 * 13) & (data['timestamp'] < 24 * 14)
+            (data['timestamp'] >= train_t) & (data['timestamp'] < test_t)
             ]
-    print(len(train_data), len(test_data))
-    model = train_model(train_data, max_iter=300)
-    _ = eval_model(model, train_data, test_data)
+    model = train_model(train_data, max_iter=100)
+    mse = eval_model(model, test_data)
+    print(f'init MSE: {mse}')
+    results.append(mse)
+    for i, item in enumerate(time_cv(data[data['timestamp'] >= test_t])):
+        train_data = test_data
+        test_data = item
+        model = update_model(model, train_data, max_iter=100, iprint=0)
+        mse = eval_model(model, test_data)
+        print(f'step {i} MSE: {mse}')
+        results.append(mse)
+    print(np.mean(np.sqrt(results)), np.std(np.sqrt(results)))
