@@ -4,6 +4,7 @@ from sklearn.preprocessing import QuantileTransformer
 from sklearn.metrics import mean_squared_error
 import matplotlib.pyplot as plt
 import gpflow
+import tensorflow as tf
 
 from src.models.osgpr import OSGPR
 
@@ -81,6 +82,7 @@ def train_model(
 
     Z = x[np.random.permutation(x.shape[0])[0:M], :]
     model = gpflow.models.sgpr.SGPR((x, y), kernel, Z)
+    gpflow.set_trainable(model.kernel, False)
 
     optimizer = gpflow.optimizers.Scipy()
     optimizer.minimize(
@@ -113,15 +115,16 @@ def update_model(
     new_model = OSGPR(
             (x, y),
             kernel,
-            mu,
-            Su,
-            Kaa1,
-            Z_opt,
+            mu[new_m:, :],
+            Su[new_m:, new_m:],
+            Kaa1[new_m:, new_m:],
+            Z_opt[new_m:, :],
             Zinit,
             )
     new_model.likelihood.variance.assign(model.likelihood.variance)
     for i, item in enumerate(model.kernel.trainable_variables):
         new_model.kernel.trainable_variables[i].assign(item)
+    gpflow.set_trainable(model.kernel, False)
     optimizer = gpflow.optimizers.Scipy()
     optimizer.minimize(
             new_model.training_loss,
@@ -191,6 +194,8 @@ def plot_spatial(model: gpflow.models.GPModel, data, timestamp=None):
 
 
 if __name__ == '__main__':
+    np.random.seed(0)
+    tf.random.set_seed(0)
     data = get_data(data_file)
     train_t = 13*24
     test_t = 13*24 + 24
@@ -203,6 +208,7 @@ if __name__ == '__main__':
     mse = eval_model(model, test_data)
     print(f'init MSE: {mse}')
     results.append(mse)
+
     for i, item in enumerate(time_cv(data[data['timestamp'] >= test_t])):
         train_data = test_data
         test_data = item
