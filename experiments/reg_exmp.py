@@ -119,7 +119,6 @@ def plot_VFE_optimized(M, use_old_Z, shuffle):
     seen_y = y[:gap, :]
 
     Kaa1 = model1.kernel.K(model1.inducing_variable.Z)
-
     # Zinit = init_Z(Zopt.numpy(), X2, use_old_Z)
     Zinit = X2[np.random.permutation(X1.shape[0])[0:M], :]
     Zinit = np.vstack((Zopt.numpy(), Zinit))
